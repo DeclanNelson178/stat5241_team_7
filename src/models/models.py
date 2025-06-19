@@ -1,4 +1,6 @@
 from abc import abstractmethod
+import itertools
+import time
 import numpy as np
 from tqdm import tqdm
 from typing import List
@@ -70,10 +72,15 @@ class Model:
         print(model_log)
         print(hashes + "\n")
 
+        s = time.time()
         model = self.train(train_df[features], train_df[target])
+        e = time() - s
+        print(f"Training took: {e / 60:.2f} minutes")
         print("running predictions...")
         y_pred, y_prob = self.predict(model, val_df[features])
-        return self.evaluate(val_df[target], y_pred, y_prob)
+        df = self.evaluate(val_df[target], y_pred, y_prob)
+        df["runtime"] = e
+        return df
 
     @abstractmethod
     def train(self, X_train: pd.DataFrame, y_train: pd.Series):
@@ -165,8 +172,12 @@ class NeuralNetModel(Model):
         )
         loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
-        model = FeedForwardNet(X_train_np.shape[1]).to(self.device)
-        optimizer = optim.Adam(model.parameters(), lr=1e-3)
+        model = FeedForwardNet(
+            X_train_np.shape[1], self.kwargs_for_model.get("hidden_dims")
+        ).to(self.device)
+        optimizer = optim.Adam(
+            model.parameters(), lr=self.kwargs_for_model.get("lr", 1e-3)
+        )
         criterion = nn.BCEWithLogitsLoss()
 
         num_epochs = 20
@@ -203,6 +214,17 @@ class RegisteredModels:
     @classmethod
     def model_registry(cls) -> List[Model]:
         datasets = [Datasets.V1, Datasets.V2]
+        xgd_boost_params = {
+            "n_estimators": [10, 50, 100, 500],
+            "max_depth": [3, 5, 6, 8],
+            "learning_date": [0.1, 0.001, 0.0001],
+            "subsample": [0.05, 0.7, 0.8, 0.9],
+            "colsample_bytree": [0.05, 0.7, 0.8, 0.9],
+        }
+        nn_params = {
+            "lr": [0.1, 0.01, 0.001, 0.00001],
+            "hidden_dims": [[128, 64], [32, 16], [128, 64, 32]],
+        }
         models = []
         for dataset in datasets:
             models.extend(
@@ -232,22 +254,35 @@ class RegisteredModels:
                             "n_jobs": -1,
                         },
                     ),
+                ]
+            )
+            # Create the cross product
+            keys = xgd_boost_params.keys()
+            values = xgd_boost_params.values()
+            combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+            models.extend(
+                [
                     XGBoostModel(
                         dataset=dataset,
                         kwargs_for_model={
-                            "n_estimators": 100,
-                            "max_depth": 6,
-                            "learning_rate": 0.1,
-                            "subsample": 0.8,
-                            "colsample_bytree": 0.8,
+                            **combo,
                             "n_jobs": -1,
                         },
-                    ),
-                    NeuralNetModel(
-                        dataset=dataset,
-                    ),
+                    )
+                    for combo in combinations
                 ]
             )
+
+            keys = nn_params.keys()
+            values = nn_params.values()
+            combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+            models.extend(
+                [
+                    NeuralNetModel(dataset=dataset, kwargs_for_model=combo)
+                    for combo in combinations
+                ]
+            )
+
         return models
 
     @classmethod

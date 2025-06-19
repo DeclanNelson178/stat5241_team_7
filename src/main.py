@@ -9,5 +9,5 @@ from src.models.helpers import split_data
 from src.models.models import RegisteredModels
 
 if __name__ == "__main__":
-    eval = RegisteredModels.model_registry()[-1].run_model()
+    eval = RegisteredModels.run_models()
     print(eval)
