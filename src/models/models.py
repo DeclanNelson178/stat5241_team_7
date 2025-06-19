@@ -74,7 +74,7 @@ class Model:
 
         s = time.time()
         model = self.train(train_df[features], train_df[target])
-        e = time() - s
+        e = time.time() - s
         print(f"Training took: {e / 60:.2f} minutes")
         print("running predictions...")
         y_pred, y_prob = self.predict(model, val_df[features])
