@@ -24,10 +24,22 @@ def get_data_root():
     return get_repo_root() / "data"
 
 
-DATA_VERSION = 5
+def get_model_root():
+    return get_repo_root() / "data" / "model"
 
+
+DATA_VERSION = 7  # increment caches to re-run everything
 ROLLCALL_QUERY = get_data_root() / f"rollcall_query_{str(DATA_VERSION)}.parquet"
 ROLLCALL_CLEANED = get_data_root() / f"rollcall_cleaned_{str(DATA_VERSION)}.parquet"
 ROLLCALL_CRS_POLICY = (
     get_data_root() / f"rollcall_crs_policy_{str(DATA_VERSION)}.parquet"
 )
+RAW_INDIVIDUAL_VOTES = get_data_root() / "house_senate_votes.parquet"
+INDIVIDUAL_VOTES_V1 = get_data_root() / f"individual_votes_{str(DATA_VERSION)}.parquet"
+TRAINING_DATA_V1 = get_data_root() / f"training_data_v1_{str(DATA_VERSION)}.parquet"
+
+RAW_PARTY_MEMBERSHIP = get_data_root() / "house_senate_members.csv"
+VOTE_WITH_PARTY = (
+    get_data_root() / f"individual_votes_with_party_{str(DATA_VERSION)}.csv"
+)
+TRAINING_DATA_V2 = get_data_root() / f"training_data_v2_{str(DATA_VERSION)}.csv"

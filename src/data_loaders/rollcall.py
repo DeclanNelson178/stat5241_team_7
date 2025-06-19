@@ -1,15 +1,26 @@
+from functools import lru_cache
+from typing import List, Tuple
 import pandas as pd
 
 import pandas as pd
 import requests
 import numpy as np
 from collections import defaultdict
-from src.data_loaders.helpers import get_vote_type_groups, chamber_to_value
+from src.data_loaders.helpers import (
+    get_vote_type_groups,
+    chamber_to_value,
+    is_democrat,
+    is_republican,
+)
 from src.data_loaders.utils import parquet_cache
 from src.data_loaders.data_paths import (
-    ROLLCALL_QUERY,
+    INDIVIDUAL_VOTES_V1,
     ROLLCALL_CLEANED,
     ROLLCALL_CRS_POLICY,
+    RAW_INDIVIDUAL_VOTES,
+    RAW_PARTY_MEMBERSHIP,
+    TRAINING_DATA_V2,
+    VOTE_WITH_PARTY,
 )
 
 
@@ -98,7 +109,9 @@ def get_cleaned_rollcall_data():
     df["vote_passed"] = df["vote_result"].isin(passed_results).fillna(False).astype(int)
     df = df.drop(columns="vote_result")
     df["date"] = pd.to_datetime(df["date"])
-    return df.set_index(["date", "congress", "session", "bill_number", "rollnumber"])
+    return df.set_index(
+        ["date", "congress", "session", "chamber", "bill_number", "rollnumber"]
+    )
 
 
 @parquet_cache(ROLLCALL_CRS_POLICY)
@@ -121,7 +134,6 @@ def get_rollcall_data_crs_policy_areas():
         .str.replace(",", "")
         .str.replace(".", "")
     )
-    policies = policy_areas.unique()
     one_hot_policy_areas = pd.get_dummies(policy_areas).astype(int)
     one_hot_policy_areas = one_hot_policy_areas.rename(
         columns={c: "crs_policy_area_" + c for c in one_hot_policy_areas.columns}
@@ -129,9 +141,85 @@ def get_rollcall_data_crs_policy_areas():
     df = df.drop(columns="crs_policy_area").join(one_hot_policy_areas)
     return df[
         [
-            "chamber",
             "vote_passed",
             *[c for c in df.columns if c.startswith("vote_type_")],
             *[c for c in df.columns if c.startswith("crs_policy_area_")],
         ]
     ]
+
+
+def get_raw_individual_votes():
+    return pd.read_parquet(RAW_INDIVIDUAL_VOTES).set_index(
+        ["congress", "chamber", "rollnumber", "icpsr"]
+    )[["vote_for", "vote_against"]]
+
+
+@parquet_cache(INDIVIDUAL_VOTES_V1)
+def get_individual_votes(vote_for_only: bool):
+    ind_df = get_raw_individual_votes()
+    bill_df = get_rollcall_data_crs_policy_areas().reset_index(["date", "bill_number"])
+    df = bill_df.join(ind_df)
+    if vote_for_only:
+        # remove anyone who abstained from the vote
+        df = df.loc[(df["vote_for"] == 1) | (df["vote_against"] == 1)]
+        df = df.drop(columns=["vote_against"])
+
+    return df
+
+
+@lru_cache(maxsize=1)
+def get_training_data_v1() -> Tuple[str, List[str], pd.DataFrame]:
+    """
+    Simple training data with the following predictors:
+    - personal id
+    - Congressional number
+    - Chamber
+    - Session
+    - Vote type: ammend, cloture, concur, pass, recommit, suspend, table, veto
+    - Crs policy areas: eduction, etc.
+
+    Response variable is: Vote for the bill
+    """
+    df = get_individual_votes(vote_for_only=True).reset_index()
+    target = "vote_for"
+    features = [
+        "icpsr",
+        "congress",
+        "chamber",
+        "session",
+        *[c for c in df.columns if c.startswith("vote_type_")],
+        *[c for c in df.columns if c.startswith("crs_policy_area")],
+    ]
+    df = df[[target, *features]]
+    return target, features, df
+
+
+def get_raw_party_membership():
+    return pd.read_csv(RAW_PARTY_MEMBERSHIP)
+
+
+@parquet_cache(VOTE_WITH_PARTY)
+def get_individual_votes_with_party() -> pd.DataFrame:
+    df = get_individual_votes(vote_for_only=True)
+    party_df = get_raw_party_membership()
+    party_df["d"] = party_df["party_code"].apply(is_democrat)
+    party_df["r"] = party_df["party_code"].apply(is_republican)
+    return df.join(party_df.set_index(["congress", "icpsr"])[["d", "r"]])
+
+
+@lru_cache(maxsize=1)
+def get_trainig_data_v2():
+    df = get_individual_votes_with_party().reset_index()
+    target = "vote_for"
+    features = [
+        "icpsr",
+        "congress",
+        "chamber",
+        "session",
+        "d",
+        "r",
+        *[c for c in df.columns if c.startswith("vote_type_")],
+        *[c for c in df.columns if c.startswith("crs_policy_area")],
+    ]
+    df = df[[target, *features]]
+    return target, features, df

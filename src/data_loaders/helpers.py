@@ -99,3 +99,11 @@ def chamber_to_value(chamber: str):
 def value_to_chamber(val: int):
     """Binary encoding of house and senate values"""
     return {0: "house", 1: "senate"}[val]
+
+
+def is_democrat(party_code: int) -> int:
+    return party_code == 100
+
+
+def is_republican(party_code: int) -> int:
+    return party_code == 200

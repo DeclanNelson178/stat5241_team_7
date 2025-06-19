@@ -1,6 +1,8 @@
+import functools
 import os
 import pandas as pd
 from functools import wraps
+from src.data_loaders.data_paths import get_data_root, get_model_root
 
 
 def parquet_cache(filepath):
@@ -21,6 +23,27 @@ def parquet_cache(filepath):
                 result = func(*args, **kwargs)
                 result.to_parquet(filepath, index=True)
                 return result
+
+        return wrapper
+
+    return decorator
+
+
+def parquet_cache_for_model():
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            base_path = get_model_root()
+            os.makedirs(base_path, exist_ok=True)
+            file_name = f"{self.model_name}_{self.model_identifier}.parquet"
+            path = os.path.join(base_path, file_name)
+            if os.path.exists(path):
+                print(f"[Cache] Loaded results from {path}")
+                return pd.read_parquet(path)
+            result = func(self, *args, **kwargs)
+            result.to_parquet(path)
+            print(f"[Cache] Saved results to {path}")
+            return result
 
         return wrapper
 
