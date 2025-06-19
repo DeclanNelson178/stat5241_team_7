@@ -24,7 +24,10 @@ def get_data_root():
     return get_repo_root() / "data"
 
 
-DATA_VERSION = 1
+DATA_VERSION = 5
 
 ROLLCALL_QUERY = get_data_root() / f"rollcall_query_{str(DATA_VERSION)}.parquet"
-ROLLCALL_CLEANED = get_data_root() / f"rollcall_query_{str(DATA_VERSION)}.parquet"
+ROLLCALL_CLEANED = get_data_root() / f"rollcall_cleaned_{str(DATA_VERSION)}.parquet"
+ROLLCALL_CRS_POLICY = (
+    get_data_root() / f"rollcall_crs_policy_{str(DATA_VERSION)}.parquet"
+)

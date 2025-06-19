@@ -19,7 +19,7 @@ def parquet_cache(filepath):
             else:
                 print(f"Cache not found. Running function and saving to {filepath}")
                 result = func(*args, **kwargs)
-                result.to_parquet(filepath, index=False)
+                result.to_parquet(filepath, index=True)
                 return result
 
         return wrapper

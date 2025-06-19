@@ -86,3 +86,16 @@ def get_vote_type_groups():
             "agree to senate amendments",
         ],
     }
+
+
+def chamber_to_value(chamber: str):
+    """Binary encoding of house and senate values"""
+    return {
+        "house": 0,
+        "senate": 1,
+    }[chamber]
+
+
+def value_to_chamber(val: int):
+    """Binary encoding of house and senate values"""
+    return {0: "house", 1: "senate"}[val]
