@@ -10,4 +10,5 @@ from src.models.models import RegisteredModels
 
 if __name__ == "__main__":
     eval = RegisteredModels.run_models()
+    breakpoint()
     print(eval)

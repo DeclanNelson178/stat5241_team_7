@@ -93,7 +93,7 @@ def chamber_to_value(chamber: str):
     return {
         "house": 0,
         "senate": 1,
-    }[chamber]
+    }[chamber.lower()]
 
 
 def value_to_chamber(val: int):

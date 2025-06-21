@@ -98,7 +98,9 @@ class Model:
         eval_df = pd.DataFrame.from_records([eval])
         eval_df["model_name"] = self.model_name
         eval_df["model_id"] = self.model_identifier
-        return eval_df.set_index(["model_name", "model_id"], drop=True)
+        eval_df = eval_df.set_index(["model_name", "model_id"], drop=True)
+        print(eval_df)
+        return eval_df
 
 
 @attr.s
@@ -213,49 +215,78 @@ class RegisteredModels:
 
     @classmethod
     def model_registry(cls) -> List[Model]:
-        datasets = [Datasets.V1, Datasets.V2]
+        datasets = [
+            # Datasets.V1,
+            # Datasets.V2,
+            Datasets.V3,
+            Datasets.V4,
+            Datasets.V5,
+        ]
+
         xgd_boost_params = {
-            "n_estimators": [10, 50, 100, 500],
-            "max_depth": [3, 5, 6, 8],
-            "learning_date": [0.1, 0.001, 0.0001],
-            "subsample": [0.05, 0.7, 0.8, 0.9],
-            "colsample_bytree": [0.05, 0.7, 0.8, 0.9],
+            "n_estimators": [500],
+            "max_depth": [8],
+            "learning_rate": [0.1],
+            "subsample": [0.8],
+            "colsample_bytree": [0.8],
         }
+        """
+        v2_n_estimators_500_max_depth_8_learning_rate_0.1_subsample_0.8_colsample_bytree_0.9
+        """
+
         nn_params = {
-            "lr": [0.1, 0.01, 0.001, 0.00001],
-            "hidden_dims": [[128, 64], [32, 16], [128, 64, 32]],
+            "lr": [0.1, 0.01, 0.001],
+            "hidden_dims": [[128, 64], [64, 128, 64, 32]],
         }
+        """
+        best results seem to be coming from a large hidden layer in the middle and a slow learnings rate
+        v2_lr_0.001_hidden_dims_[128, 64, 32]  0.852148   0.867209  0.942980  0.903508  0.900831   483.855843
+        v2_lr_0.001_hidden_dims_[128, 64]      0.850207   0.862891  0.946305  0.902675  0.898886  3265.070243
+        """
         models = []
         for dataset in datasets:
-            models.extend(
-                [
-                    DummyClassifierModel(
-                        dataset=dataset, kwargs_for_model={"strategy": "most_frequent"}
-                    ),
-                    DummyClassifierModel(
-                        dataset=dataset, kwargs_for_model={"strategy": "uniform"}
-                    ),
-                    LogisticRegressionModel(
-                        dataset=dataset,
-                        kwargs_for_model={
-                            "C": 1.0,
-                            "max_iter": 1000,
-                            "verbose": 1,
-                            "n_jobs": -1,
-                        },
-                    ),
-                    LogisticRegressionModel(
-                        dataset=dataset,
-                        kwargs_for_model={
-                            "solver": "saga",
-                            "penalty": "l2",  # or 'none' if unregularized
-                            "verbose": 1,
-                            "max_iter": 100,  # running for anything more than this is prohibitevly expensive
-                            "n_jobs": -1,
-                        },
-                    ),
-                ]
-            )
+            if dataset not in [Datasets.V4, Datasets.V5]:
+                models.extend(
+                    [
+                        DummyClassifierModel(
+                            dataset=dataset,
+                            kwargs_for_model={"strategy": "most_frequent"},
+                        ),
+                        DummyClassifierModel(
+                            dataset=dataset, kwargs_for_model={"strategy": "uniform"}
+                        ),
+                        LogisticRegressionModel(
+                            dataset=dataset,
+                            kwargs_for_model={
+                                "C": 1.0,
+                                "max_iter": 1000,
+                                "verbose": 1,
+                                "n_jobs": -1,
+                            },
+                        ),
+                        LogisticRegressionModel(
+                            dataset=dataset,
+                            kwargs_for_model={
+                                "solver": "saga",
+                                "penalty": "l2",  # or 'none' if unregularized
+                                "verbose": 1,
+                                "max_iter": 100,  # running for anything more than this is prohibitevly expensive
+                                "n_jobs": -1,
+                            },
+                        ),
+                        LogisticRegressionModel(
+                            dataset=dataset,
+                            kwargs_for_model={
+                                "solver": "saga",
+                                "penalty": "l1",  # or 'none' if unregularized
+                                "verbose": 1,
+                                "C": 1.0,
+                                "max_iter": 1000,  # running for anything more than this is prohibitevly expensive
+                                "n_jobs": -1,
+                            },
+                        ),
+                    ]
+                )
             # Create the cross product
             keys = xgd_boost_params.keys()
             values = xgd_boost_params.values()
@@ -287,4 +318,9 @@ class RegisteredModels:
 
     @classmethod
     def run_models(cls):
-        return pd.concat([model.run_model() for model in cls.model_registry()])
+        dfs = []
+        models = cls.model_registry()
+        for i, model in enumerate(models):
+            print(f"############\n{i} / {len(models)}\n#######")
+            dfs.append(model.run_model())
+        return pd.concat(dfs)
