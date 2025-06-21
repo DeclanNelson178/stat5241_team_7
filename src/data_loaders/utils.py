@@ -2,7 +2,7 @@ import functools
 import os
 import pandas as pd
 from functools import wraps
-from src.data_loaders.data_paths import get_data_root, get_model_root
+from src.data_loaders.data_paths import DATA_VERSION, get_data_root, get_model_root
 
 
 def parquet_cache(filepath):
@@ -35,7 +35,9 @@ def parquet_cache_for_model():
         def wrapper(self, *args, **kwargs):
             base_path = get_model_root()
             os.makedirs(base_path, exist_ok=True)
-            file_name = f"{self.model_name}_{self.model_identifier}.parquet"
+            file_name = (
+                f"{self.model_name}_{self.model_identifier}_{DATA_VERSION}.parquet"
+            )
             path = os.path.join(base_path, file_name)
             if os.path.exists(path):
                 print(f"[Cache] Loaded results from {path}")

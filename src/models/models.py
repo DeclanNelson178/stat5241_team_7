@@ -216,8 +216,8 @@ class RegisteredModels:
     @classmethod
     def model_registry(cls) -> List[Model]:
         datasets = [
-            # Datasets.V1,
-            # Datasets.V2,
+            Datasets.V1,
+            Datasets.V2,
             Datasets.V3,
             Datasets.V4,
             Datasets.V5,
@@ -259,7 +259,7 @@ class RegisteredModels:
                             dataset=dataset,
                             kwargs_for_model={
                                 "C": 1.0,
-                                "max_iter": 1000,
+                                "max_iter": 300,
                                 "verbose": 1,
                                 "n_jobs": -1,
                             },
@@ -270,7 +270,7 @@ class RegisteredModels:
                                 "solver": "saga",
                                 "penalty": "l2",  # or 'none' if unregularized
                                 "verbose": 1,
-                                "max_iter": 100,  # running for anything more than this is prohibitevly expensive
+                                "max_iter": 300,  # running for anything more than this is prohibitevly expensive
                                 "n_jobs": -1,
                             },
                         ),
@@ -281,7 +281,7 @@ class RegisteredModels:
                                 "penalty": "l1",  # or 'none' if unregularized
                                 "verbose": 1,
                                 "C": 1.0,
-                                "max_iter": 1000,  # running for anything more than this is prohibitevly expensive
+                                "max_iter": 300,  # running for anything more than this is prohibitevly expensive
                                 "n_jobs": -1,
                             },
                         ),
