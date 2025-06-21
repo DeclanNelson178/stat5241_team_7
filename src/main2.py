@@ -4,6 +4,6 @@ from src.data_loaders.rollcall import (
 )
 
 if __name__ == "__main__":
-    df = get_training_data_v5()
+    df = get_training_data_v5`()
     breakpoint()
     print(df)
