@@ -5,7 +5,9 @@ import pandas as pd
 import pandas as pd
 import requests
 import numpy as np
-from collections import defaultdict
+from collections import Counter, defaultdict
+
+from sklearn.preprocessing import MultiLabelBinarizer
 from src.data_loaders.helpers import (
     get_vote_type_groups,
     chamber_to_value,
@@ -14,6 +16,7 @@ from src.data_loaders.helpers import (
 )
 from src.data_loaders.utils import parquet_cache
 from src.data_loaders.data_paths import (
+    DATA_VERSION,
     get_data_root,
     INDIVIDUAL_VOTES_V1,
     ROLLCALL_CLEANED,
@@ -150,6 +153,42 @@ def get_rollcall_data_crs_policy_areas():
     ]
 
 
+# @parquet_cache(get_data_root() / f"rollcall_data_crs_subjects_{DATA_VERSION}.parquet")
+def get_rollcall_data_crs_subjects():
+    """
+    Fetch clean rollcall data and create a one hot encoding for crs_policy_areas
+
+    This data is cleaned. We are only return integer values. 0 indicates exclusion, 1 indicates
+    inclusion.
+    """
+    df = get_cleaned_rollcall_data().dropna(subset="crs_subjects")
+    df["crs_subjects"] = df["crs_subjects"].apply(
+        lambda ls: [c.lower().strip().replace(" ", "_").replace(",", "") for c in ls]
+    )
+
+    counter = Counter()
+    for subjects in df["crs_subjects"]:
+        counter.update(subjects)
+    common_subjects = [k for k, _ in counter.most_common(50)]
+
+    mlb = MultiLabelBinarizer()
+    subject_dummies = pd.DataFrame(
+        mlb.fit_transform(df["crs_subjects"]),
+        columns=mlb.classes_,
+        index=df.index,
+    )
+    subject_dummies["other"] = subject_dummies[
+        [c for c in subject_dummies.columns if c not in common_subjects]
+    ].sum(axis=1)
+    subject_dummies = subject_dummies[common_subjects + ["other"]]
+    subject_dummies = subject_dummies.rename(
+        columns={c: f"crs_subject_{c}" for c in subject_dummies.columns}
+    )
+    df = get_rollcall_data_crs_policy_areas().join(subject_dummies)
+    df[subject_dummies.columns] = df[subject_dummies.columns].fillna(0)
+    return df
+
+
 def get_raw_individual_votes():
     return pd.read_parquet(RAW_INDIVIDUAL_VOTES).set_index(
         ["congress", "chamber", "rollnumber", "icpsr"]
@@ -166,6 +205,18 @@ def get_individual_votes(vote_for_only: bool):
         df = df.loc[(df["vote_for"] == 1) | (df["vote_against"] == 1)]
         df = df.drop(columns=["vote_against"])
 
+    return df
+
+
+# @parquet_cache(get_data_root() / f"ind_votes_with_subject_{DATA_VERSION}.parquet")
+def get_indivdual_votes_with_subjects():
+    print("getting ind vote data joining w/ subjects")
+    ind_df = get_raw_individual_votes()
+    bill_df = get_rollcall_data_crs_subjects().reset_index(["date", "bill_number"])
+    df = bill_df.join(ind_df)
+    # remove anyone who abstained from the vote
+    df = df.loc[(df["vote_for"] == 1) | (df["vote_against"] == 1)]
+    df = df.drop(columns=["vote_against"])
     return df
 
 
@@ -227,9 +278,12 @@ def get_trainig_data_v2():
     return target, features, df
 
 
+# @parquet_cache(
+#     get_data_root() / f"ind_votes_with_party_enriched_1_{DATA_VERSION}.parquet"
+# )
 def get_individual_votes_with_party_enriched() -> pd.DataFrame:
     """Add party and state level data into frame"""
-    ind_df = get_individual_votes(vote_for_only=True)
+    ind_df = get_indivdual_votes_with_subjects()
     party_df = get_raw_party_membership()
     party_df["d"] = party_df["party_code"].apply(is_democrat).astype(int)
     party_df["r"] = party_df["party_code"].apply(is_republican).astype(int)
@@ -431,6 +485,42 @@ def get_training_data_v5():
         "gender",
         *[c for c in df.columns if c.startswith("vote_type_")],
         *[c for c in df.columns if c.startswith("crs_policy_area")],
+    ]
+    df = df[[target, *features]]
+    return target, features, df
+
+
+@lru_cache(maxsize=1)
+def get_training_data_v6():
+    df = get_individual_votes_with_party_enriched_lobby().reset_index()
+    target = "vote_for"
+    features = [
+        "icpsr",
+        "congress",
+        "chamber",
+        "session",
+        "d",
+        "r",
+        "terms_served",
+        "pct_pop",
+        "prior_votes_for_bill",
+        "state_icpsr",
+        "district_code",
+        "personal_cfscore",
+        "contributor_cfscore",
+        "composite_cfscore",
+        "num_contributors",
+        "num_contributions",
+        "ind_contributions",
+        "pac_contributions",
+        "party_contributions",
+        "amount_spent",
+        "primary_election_pct",
+        "general_election_pct",
+        "gender",
+        *[c for c in df.columns if c.startswith("vote_type_")],
+        *[c for c in df.columns if c.startswith("crs_policy_area")],
+        *[c for c in df.columns if c.startswith("crs_subject")],
     ]
     df = df[[target, *features]]
     return target, features, df

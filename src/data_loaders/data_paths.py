@@ -28,7 +28,7 @@ def get_model_root():
     return get_repo_root() / "data" / "model"
 
 
-DATA_VERSION = 10  # increment caches to re-run everything
+DATA_VERSION = 11  # increment caches to re-run everything
 ROLLCALL_QUERY = get_data_root() / f"rollcall_query_{str(DATA_VERSION)}.parquet"
 ROLLCALL_CLEANED = get_data_root() / f"rollcall_cleaned_{str(DATA_VERSION)}.parquet"
 ROLLCALL_CRS_POLICY = (

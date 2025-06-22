@@ -1,10 +1,16 @@
 from enum import Enum
+from typing import List, Tuple
+import uuid
+
+import attr
+import pandas as pd
 from src.data_loaders.rollcall import (
     get_trainig_data_v3,
     get_trainig_data_v4,
     get_training_data_v1,
     get_trainig_data_v2,
     get_training_data_v5,
+    get_training_data_v6,
 )
 
 
@@ -24,6 +30,9 @@ class Datasets(Enum):
     V5 = "v5"
     """V4 + lobbyist data"""
 
+    V6 = "v6"
+    """V5 + subjects"""
+
     def get_dataset(self):
         return {
             Datasets.V1: get_training_data_v1,
@@ -31,4 +40,19 @@ class Datasets(Enum):
             Datasets.V3: get_trainig_data_v3,
             Datasets.V4: get_trainig_data_v4,
             Datasets.V5: get_training_data_v5,
+            Datasets.V6: get_training_data_v6,
         }[self]()
+
+
+@attr.s
+class DatasetOnTheFly:
+    df: pd.DataFrame = attr.ib()
+    target: str = attr.ib()
+
+    @property
+    def value(self) -> str:
+        # random id so nothing gets cached
+        return "tmp_" + str(uuid.uuid1())
+
+    def get_dataset(self) -> Tuple[str, List[str], pd.DataFrame]:
+        return self.target, [c for c in self.df.columns if c != self.target], self.df

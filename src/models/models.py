@@ -34,6 +34,7 @@ class Model:
     dataset: Datasets = attr.ib()
     kwargs_for_model = attr.ib(factory=dict)
     kwargs_for_splitting_data = attr.ib(factory=dict)
+    verbose: bool = attr.ib(default=True)
 
     WHITE_LISTED_KWARGS = ["verbose", "n_jobs"]
 
@@ -66,17 +67,19 @@ class Model:
             df, target_col=target, **self.kwargs_for_splitting_data
         )
 
-        model_log = f"Training model: {self.model_name} {self.model_identifier}"
-        hashes = "".join(len(model_log) * ["#"])
-        print("\n" + hashes)
-        print(model_log)
-        print(hashes + "\n")
+        if self.verbose:
+            model_log = f"Training model: {self.model_name} {self.model_identifier}"
+            hashes = "".join(len(model_log) * ["#"])
+            print("\n" + hashes)
+            print(model_log)
+            print(hashes + "\n")
 
         s = time.time()
         model = self.train(train_df[features], train_df[target])
         e = time.time() - s
-        print(f"Training took: {e / 60:.2f} minutes")
-        print("running predictions...")
+        if self.verbose:
+            print(f"Training took: {e / 60:.2f} minutes")
+            print("running predictions...")
         y_pred, y_prob = self.predict(model, val_df[features])
         df = self.evaluate(val_df[target], y_pred, y_prob)
         df["runtime"] = e
@@ -92,14 +95,16 @@ class Model:
 
     @abstractmethod
     def evaluate(self, y_val, y_pred, y_prob):
-        print("evaluating...")
+        if self.verbose:
+            print("evaluating...")
         eval = evaluate_predictions(y_val, y_pred, y_prob)
         eval.pop("confusion_matrix")
         eval_df = pd.DataFrame.from_records([eval])
         eval_df["model_name"] = self.model_name
         eval_df["model_id"] = self.model_identifier
         eval_df = eval_df.set_index(["model_name", "model_id"], drop=True)
-        print(eval_df)
+        if self.verbose:
+            print(eval_df)
         return eval_df
 
 
@@ -215,13 +220,7 @@ class RegisteredModels:
 
     @classmethod
     def model_registry(cls) -> List[Model]:
-        datasets = [
-            Datasets.V1,
-            Datasets.V2,
-            Datasets.V3,
-            Datasets.V4,
-            Datasets.V5,
-        ]
+        datasets = [d for d in Datasets]
 
         xgd_boost_params = {
             "n_estimators": [500],
@@ -245,7 +244,7 @@ class RegisteredModels:
         """
         models = []
         for dataset in datasets:
-            if dataset not in [Datasets.V4, Datasets.V5]:
+            if dataset in [Datasets.V1, Datasets.V2, Datasets.V3]:
                 models.extend(
                     [
                         DummyClassifierModel(
