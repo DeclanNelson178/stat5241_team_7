@@ -61,7 +61,8 @@ def get_cleaned_rollcall_data():
     )
     df["congress"] = df["congress"].astype(int)
     df["bill_number"] = df["bill_number"].astype(str).str.lower().str.strip()
-    df["vote_question"] = df["vote_question"].astype(str).str.lower().str.strip()
+    df["vote_question"] = df["vote_question"].astype(
+        str).str.lower().str.strip()
     df["rollnumber"] = df["rollnumber"].astype(int)
     df["chamber"] = df["chamber"].astype(str).str.lower().str.strip()
     df["chamber"] = df["chamber"].apply(chamber_to_value)
@@ -70,7 +71,8 @@ def get_cleaned_rollcall_data():
     df["bill_type"] = df["bill_number"].str.replace(r"\d+", "", regex=True)
 
     # these are canonical bills, the other bill types are resolutions, treaties, procedural and nomations
-    bill_types = ["hr", "s", "hj", "hjr", "hjres", "hjre", "sj", "sjr", "sjres", "sjre"]
+    bill_types = ["hr", "s", "hj", "hjr", "hjres",
+                  "hjre", "sj", "sjr", "sjres", "sjre"]
     df = df.loc[df["bill_type"].isin(bill_types)]
 
     # Remove any rows that are unusable -- you need to have a bill, a vote, and a location of the vote
@@ -111,7 +113,8 @@ def get_cleaned_rollcall_data():
         )
     ]
 
-    df["vote_passed"] = df["vote_result"].isin(passed_results).fillna(False).astype(int)
+    df["vote_passed"] = df["vote_result"].isin(
+        passed_results).fillna(False).astype(int)
     df = df.drop(columns="vote_result")
     df["date"] = pd.to_datetime(df["date"])
     return df.set_index(
@@ -141,7 +144,8 @@ def get_rollcall_data_crs_policy_areas():
     )
     one_hot_policy_areas = pd.get_dummies(policy_areas).astype(int)
     one_hot_policy_areas = one_hot_policy_areas.rename(
-        columns={c: "crs_policy_area_" + c for c in one_hot_policy_areas.columns}
+        columns={c: "crs_policy_area_" +
+                 c for c in one_hot_policy_areas.columns}
     )
     df = df.drop(columns="crs_policy_area").join(one_hot_policy_areas)
     return df[
@@ -163,7 +167,8 @@ def get_rollcall_data_crs_subjects():
     """
     df = get_cleaned_rollcall_data().dropna(subset="crs_subjects")
     df["crs_subjects"] = df["crs_subjects"].apply(
-        lambda ls: [c.lower().strip().replace(" ", "_").replace(",", "") for c in ls]
+        lambda ls: [c.lower().strip().replace(" ", "_").replace(",", "")
+                    for c in ls]
     )
 
     counter = Counter()
@@ -198,7 +203,8 @@ def get_raw_individual_votes():
 @parquet_cache(INDIVIDUAL_VOTES_V1)
 def get_individual_votes(vote_for_only: bool):
     ind_df = get_raw_individual_votes()
-    bill_df = get_rollcall_data_crs_policy_areas().reset_index(["date", "bill_number"])
+    bill_df = get_rollcall_data_crs_policy_areas(
+    ).reset_index(["date", "bill_number"])
     df = bill_df.join(ind_df)
     if vote_for_only:
         # remove anyone who abstained from the vote
@@ -212,7 +218,8 @@ def get_individual_votes(vote_for_only: bool):
 def get_indivdual_votes_with_subjects():
     print("getting ind vote data joining w/ subjects")
     ind_df = get_raw_individual_votes()
-    bill_df = get_rollcall_data_crs_subjects().reset_index(["date", "bill_number"])
+    bill_df = get_rollcall_data_crs_subjects(
+    ).reset_index(["date", "bill_number"])
     df = bill_df.join(ind_df)
     # remove anyone who abstained from the vote
     df = df.loc[(df["vote_for"] == 1) | (df["vote_against"] == 1)]
@@ -303,12 +310,14 @@ def get_individual_votes_with_party_enriched() -> pd.DataFrame:
     # compute the pct of the US population that the senator/congressman's state comprises
     house_df = party_df.loc[party_df["chamber"] == "House"]
     district_count = (
-        house_df.groupby(["state_abbrev", "state_icpsr", "congress"])["district_code"]
+        house_df.groupby(["state_abbrev", "state_icpsr", "congress"])[
+            "district_code"]
         .nunique()
         .to_frame("num_reps")
     )
     total_district_count = (
-        district_count.groupby("congress")["num_reps"].sum().to_frame("num_reps_total")
+        district_count.groupby("congress")[
+            "num_reps"].sum().to_frame("num_reps_total")
     )
     count_df = district_count.join(total_district_count)
     count_df["pct_pop"] = count_df["num_reps"] / count_df["num_reps_total"]
@@ -390,68 +399,15 @@ def get_trainig_data_v4():
 
 
 def get_individual_votes_with_party_enriched_lobby() -> pd.DataFrame:
-    df = get_individual_votes_with_party_enriched()
-    member_ids = [str(int(mid)) for mid in df.index.unique("icpsr")]
+    """
+    Load the pre-enriched dataset that already includes DIME financial data
+    """
+    # Use the existing enriched dataset that already has DIME data
+    enriched_data_path = get_data_root() / "dime_enriched_ds_11.parquet"
+    df = pd.read_parquet(enriched_data_path)
 
-    lobby_df = pd.read_csv(get_data_root() / "dime_recipients_1979_2024.csv")
-    lobby_df = lobby_df.loc[lobby_df["recipient.type"] == "cand"]
-
-    columns = {
-        "ICPSR2": "icpsr",
-        "cand.gender": "gender",
-        "recipient.cfscore": "personal_cfscore",
-        "contributor.cfscore": "contributor_cfscore",
-        "composite.score": "composite_cfscore",
-        "num.givers": "num_contributors",
-        "total.receipts": "num_contributions",
-        "total.disbursements": "amount_spent",
-        "total.indiv.contribs": "ind_contributions",
-        "total.pac.contribs": "pac_contributions",
-        "total.party.contribs": "party_contributions",
-        "prim.vote.pct": "primary_election_pct",
-        "gen.vote.pct": "general_election_pct",
-        "r.elec.stat": "reelection_status",
-        "election": "election",
-        "cycle": "cycle",
-    }
-    lobby_df = lobby_df.rename(columns=columns)[[*columns.values()]]
-    lobby_df = lobby_df.loc[lobby_df["icpsr"].isin(member_ids)]
-    lobby_df["icpsr"] = lobby_df["icpsr"].astype(int)
-    lobby_df["gender"] = (lobby_df["gender"].str.lower() == "m").astype(int)
-    mean_cols = [
-        "personal_cfscore",
-        "contributor_cfscore",
-        "composite_cfscore",
-        "num_contributors",
-        "num_contributions",
-        "ind_contributions",
-        "pac_contributions",
-        "party_contributions",
-        "amount_spent",
-        "primary_election_pct",
-        "general_election_pct",
-    ]
-
-    lobby_df = (
-        lobby_df.groupby(["icpsr"])[mean_cols]
-        .mean()
-        .join(lobby_df.groupby("icpsr")["gender"].first())
-    )
-
-    df = df.join(lobby_df)
-    independents = (~df["d"]) & (~df["r"])
-    republicans = (~df["d"]) & (df["r"])
-    democrats = (df["d"]) & (~df["r"])
-    for col in mean_cols:
-        for party in [independents, republicans, democrats]:
-            df.loc[party & df[col].isna(), col] = df.loc[
-                party & df[col].notna(), col
-            ].mean()
-
-    # defualt nan gender information to the most common gender
-    df["gender"] = df["gender"].fillna(df["gender"].mode().squeeze())
-
-    assert not df.isna().sum().any()
+    # The dataset already has the correct MultiIndex structure
+    # Index names: ['congress', 'session', 'chamber', 'rollnumber', 'icpsr']
     return df
 
 
