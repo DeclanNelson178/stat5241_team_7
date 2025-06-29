@@ -398,6 +398,7 @@ def get_trainig_data_v4():
     return target, features, df
 
 
+@parquet_cache(get_data_root() / f"dime_enriched_ds_{DATA_VERSION}.parquet")
 def get_individual_votes_with_party_enriched_lobby() -> pd.DataFrame:
     """
     Load the pre-enriched dataset that already includes DIME financial data
@@ -479,4 +480,15 @@ def get_training_data_v6():
         *[c for c in df.columns if c.startswith("crs_subject")],
     ]
     df = df[[target, *features]]
+    return target, features, df
+
+
+@lru_cache(maxsize=1)
+def get_training_data_pass_only():
+    # need to copy here because of the LRU cache
+    target, features, df = get_training_data_v6()
+    df = df.copy()
+    df = df.loc[df["vote_type_pass"] == 1].reset_index(drop=True)
+    features = [c for c in df.columns if not c.startswith("vote_type") and c != target]
+    df = df[[target] + features]
     return target, features, df

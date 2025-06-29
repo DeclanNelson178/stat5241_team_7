@@ -11,6 +11,7 @@ from src.data_loaders.rollcall import (
     get_trainig_data_v2,
     get_training_data_v5,
     get_training_data_v6,
+    get_training_data_pass_only,
 )
 
 
@@ -33,6 +34,8 @@ class Datasets(Enum):
     V6 = "v6"
     """V5 + subjects"""
 
+    PASS_ONLY = "pass_only"
+
     def get_dataset(self):
         return {
             Datasets.V1: get_training_data_v1,
@@ -41,6 +44,7 @@ class Datasets(Enum):
             Datasets.V4: get_trainig_data_v4,
             Datasets.V5: get_training_data_v5,
             Datasets.V6: get_training_data_v6,
+            Datasets.PASS_ONLY: get_training_data_pass_only,
         }[self]()
 
 

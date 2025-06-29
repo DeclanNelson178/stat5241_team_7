@@ -68,7 +68,7 @@ class Model:
         )
 
         if self.verbose:
-            model_log = f"Training model: {self.model_name} {self.model_identifier}"
+            model_log = f"Training {self.model_name} on {self.dataset.value}: {self.model_identifier}"
             hashes = "".join(len(model_log) * ["#"])
             print("\n" + hashes)
             print(model_log)
@@ -93,7 +93,6 @@ class Model:
     def predict(self, model, X_val: pd.DataFrame):
         """Define how to predict the validation set"""
 
-    @abstractmethod
     def evaluate(self, y_val, y_pred, y_prob):
         if self.verbose:
             print("evaluating...")
@@ -177,29 +176,33 @@ class NeuralNetModel(Model):
             torch.tensor(X_train_np, dtype=torch.float32),
             torch.tensor(y_train_np, dtype=torch.float32),
         )
-        loader = DataLoader(dataset, batch_size=256, shuffle=True)
+        loader = DataLoader(
+            dataset, batch_size=self.kwargs_for_model.get("batch_size"), shuffle=True
+        )
 
         model = FeedForwardNet(
-            X_train_np.shape[1], self.kwargs_for_model.get("hidden_dims")
+            X_train_np.shape[1],
+            with_batch_norm=self.kwargs_for_model.get("with_batch_norm"),
+            hidden_dims=self.kwargs_for_model.get("hidden_dims"),
+            dropout=self.kwargs_for_model.get("dropout"),
         ).to(self.device)
-        optimizer = optim.Adam(
-            model.parameters(), lr=self.kwargs_for_model.get("lr", 1e-3)
-        )
+        optimizer = optim.Adam(model.parameters(), lr=self.kwargs_for_model.get("lr"))
         criterion = nn.BCEWithLogitsLoss()
 
-        num_epochs = 20
+        num_epochs = self.kwargs_for_model.get("epochs")
         for epoch in range(num_epochs):  # Simple training loop
             model.train()
-            loss = 0
+            losses = []
             for xb, yb in loader:
                 xb, yb = xb.to(self.device), yb.to(self.device)
                 optimizer.zero_grad()
                 preds = model(xb)
                 loss = criterion(preds, yb)
+                losses.append(loss)
                 loss.backward()
                 optimizer.step()
 
-            print(f"{epoch} / {num_epochs}: {loss:.4f}")
+            print(f"{epoch} / {num_epochs}: {sum(losses) / len(losses):.4f}")
         self._scaler = scaler  # Save for predict
         return model
 
@@ -220,22 +223,29 @@ class RegisteredModels:
 
     @classmethod
     def model_registry(cls) -> List[Model]:
-        datasets = [d for d in Datasets]
-
+        datasets = [Datasets.V3, Datasets.V6, Datasets.PASS_ONLY]
         xgd_boost_params = {
-            "n_estimators": [500],
-            "max_depth": [8],
+            "n_estimators": [500, 600, 700],
+            "max_depth": [12, 15, 20],
             "learning_rate": [0.1],
             "subsample": [0.8],
             "colsample_bytree": [0.8],
+            "gamma": [0, 1, 5],
+            "min_child_weight": [1, 5, 10],
+            "reg_alpha": [0, 0.1, 1],
+            "reg_lambda": [1, 5, 10],
         }
         """
         v2_n_estimators_500_max_depth_8_learning_rate_0.1_subsample_0.8_colsample_bytree_0.9
         """
 
         nn_params = {
-            "lr": [0.1, 0.01, 0.001],
+            "lr": [1e-3],
             "hidden_dims": [[128, 64], [64, 128, 64, 32]],
+            "epochs": [20],
+            "with_batch_norm": [True, False],
+            "dropout": [0.1, 0.3],
+            "batch_size": [256, 512],
         }
         """
         best results seem to be coming from a large hidden layer in the middle and a slow learnings rate
@@ -244,16 +254,20 @@ class RegisteredModels:
         """
         models = []
         for dataset in datasets:
+            models.extend(
+                [
+                    DummyClassifierModel(
+                        dataset=dataset,
+                        kwargs_for_model={"strategy": "most_frequent"},
+                    ),
+                    DummyClassifierModel(
+                        dataset=dataset, kwargs_for_model={"strategy": "uniform"}
+                    ),
+                ]
+            )
             if dataset in [Datasets.V1, Datasets.V2, Datasets.V3]:
                 models.extend(
                     [
-                        DummyClassifierModel(
-                            dataset=dataset,
-                            kwargs_for_model={"strategy": "most_frequent"},
-                        ),
-                        DummyClassifierModel(
-                            dataset=dataset, kwargs_for_model={"strategy": "uniform"}
-                        ),
                         LogisticRegressionModel(
                             dataset=dataset,
                             kwargs_for_model={

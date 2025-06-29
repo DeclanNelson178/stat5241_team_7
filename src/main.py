@@ -7,8 +7,8 @@ from src.data_loaders.rollcall import (
 )
 from src.models.helpers import split_data
 from src.models.models import RegisteredModels
+from src.data_loaders.data_paths import get_data_root
 
 if __name__ == "__main__":
     eval = RegisteredModels.run_models()
-    breakpoint()
-    print(eval)
+    eval.to_csv(get_data_root() / "evaluation_full_2.csv")
